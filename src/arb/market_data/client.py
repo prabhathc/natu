@@ -314,7 +314,7 @@ class HyperliquidClient:
         best_ask = asks[0]
         quote = RawQuote(
             ts=ts,
-            market_id=f"hl:{coin}",
+            market_id=f"hl-perp:{coin}",
             bid_px=Decimal(str(best_bid["px"])),
             bid_sz=Decimal(str(best_bid["sz"])),
             ask_px=Decimal(str(best_ask["px"])),
@@ -329,7 +329,7 @@ class HyperliquidClient:
         for t in msg.get("data", []):
             trade = RawTrade(
                 ts=_ts(t["time"]),
-                market_id=f"hl:{t['coin']}",
+                market_id=f"hl-perp:{t['coin']}",
                 trade_id=str(t.get("tid", "")),
                 price=Decimal(str(t["px"])),
                 size=Decimal(str(t["sz"])),
@@ -346,7 +346,7 @@ class HyperliquidClient:
         for coin, mid in msg.get("data", {}).get("mids", {}).items():
             state = MarketStateEvent(
                 ts=ts,
-                market_id=f"hl:{coin}",
+                market_id=f"hl-perp:{coin}",
                 mark_px=Decimal(str(mid)),
             )
             await ctx["on_state"](state)
@@ -362,7 +362,7 @@ class HyperliquidClient:
 
         funding = FundingStateEvent(
             ts=ts,
-            market_id=f"hl:{coin}",
+            market_id=f"hl-perp:{coin}",
             funding_rate=Decimal(str(ctx_data.get("funding", "0"))),
             predicted_rate=Decimal(str(ctx_data.get("predictedFunding", ctx_data.get("funding", "0")))),
         )
@@ -370,7 +370,7 @@ class HyperliquidClient:
 
         state = MarketStateEvent(
             ts=ts,
-            market_id=f"hl:{coin}",
+            market_id=f"hl-perp:{coin}",
             mark_px=Decimal(str(ctx_data["markPx"])) if ctx_data.get("markPx") else None,
             oracle_px=Decimal(str(ctx_data["oraclePx"])) if ctx_data.get("oraclePx") else None,
             open_interest=Decimal(str(ctx_data["openInterest"])) if ctx_data.get("openInterest") else None,
