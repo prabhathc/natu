@@ -1,0 +1,29 @@
+# Environment
+.env
+
+# Embedded postgres data
+.pgdata/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Generated outputs
+*.csv
+*.png
+weekly_memo_*.md
+registry_snapshot.csv
+
+# OS
+.DS_Store
