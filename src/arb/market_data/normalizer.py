@@ -74,11 +74,19 @@ def asset_class_from_symbol(symbol: str) -> AssetClass:
     return "crypto"  # default for unknown HIP-3 markets
 
 
-def venue_label_from_name(name: str) -> str:
-    """Identify deployer/venue from market name."""
-    lower = name.lower()
-    if "xyz" in lower or "trade" in lower:
+def venue_label_from_name(name: str, full_name: str = "") -> str:
+    """Identify deployer/venue from market name and full_name."""
+    lower = (name + " " + full_name).lower()
+    if "wagyu" in lower or "wagyu.xyz" in lower:
+        return "xyz"
+    if "trade.fun" in lower or "trade[xyz]" in lower:
         return "xyz"
     if "felix" in lower:
         return "felix"
+    if "unit " in lower:
+        return "unit"
+    if "melt " in lower:
+        return "melt"
+    if "hybridge" in lower:
+        return "hybridge"
     return "hl_native"

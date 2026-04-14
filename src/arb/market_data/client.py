@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, AsyncIterator, Callable, Coroutine, Optional
@@ -102,53 +103,131 @@ class HyperliquidClient:
     async def get_trades(self, coin: str) -> list:
         return await self.post({"type": "trades", "coin": coin})
 
+    async def get_spot_meta(self) -> dict:
+        """Fetch spot token metadata (includes HIP-3 deployer tokens)."""
+        return await self.post({"type": "spotMeta"})
+
+    async def get_spot_meta_and_asset_ctxs(self) -> list:
+        """Fetch spot metadata + per-asset context."""
+        return await self.post({"type": "spotMetaAndAssetCtxs"})
+
     # ── Market registry builder ───────────────────────────────────────────────
 
     async def build_registry(self) -> list[MarketRegistry]:
         """
-        Enumerate all perp markets from /info meta and classify each one.
+        Enumerate all markets: native perps + HIP-3 spot deployer markets.
 
-        HIP-3 markets appear alongside native perps in the `universe` list.
-        We distinguish them by the presence of `isHip3` flag (when available)
-        or by deployer field.
+        Architecture discovery:
+        - Native perps: /info type=metaAndAssetCtxs → universe[]
+        - HIP-3 deployer markets: /info type=spotMeta → tokens[] where
+          deployerTradingFeeShare > 0. These trade as spot pairs (@N) on
+          Hyperliquid's spot DEX with deployer-controlled oracle and fees.
+        - trade[XYZ] (Wagyu.xyz): fullName contains "Wagyu.xyz"
+        - Felix: fullName contains "Felix"
         """
-        data = await self.get_meta_and_asset_ctxs()
-        meta = data[0] if isinstance(data, list) else data.get("meta", data)
-        universe: list[dict] = meta.get("universe", [])
+        # Fetch both perp and spot universes concurrently
+        perp_data, spot_data = await asyncio.gather(
+            self.get_meta_and_asset_ctxs(),
+            self.get_spot_meta(),
+        )
 
         records: list[MarketRegistry] = []
-        for idx, asset in enumerate(universe):
+
+        # ── Native perps ──────────────────────────────────────────────────────
+        meta = perp_data[0] if isinstance(perp_data, list) else perp_data
+        perp_universe: list[dict] = meta.get("universe", [])
+
+        for asset in perp_universe:
             name: str = asset.get("name", "")
-            is_hip3: bool = asset.get("isHip3", False)
-            deployer: str | None = asset.get("deployer")
+            if not name or asset.get("isDelisted"):
+                continue
 
-            # Tag venue by name heuristics if deployer field absent
-            venue = venue_label_from_name(name)
-
-            # asset_class from symbol normalizer
             asset_cls = asset_class_from_symbol(name)
-
-            # fee mode
-            fee_mode = "growth" if asset.get("isGrowthMode") else "standard"
-            if asset.get("deployerFeeShare") and float(asset.get("deployerFeeShare", 0)) > 0:
-                fee_mode = "deployer_share"
+            fee_mode = "standard"
 
             records.append(
                 MarketRegistry(
-                    market_id=f"hl:{name}",
-                    venue_label=venue,
-                    deployer=deployer,
+                    market_id=f"hl-perp:{name}",
+                    venue_label="hl_native",
+                    deployer=None,
                     symbol=name,
                     asset_class=asset_cls,
                     collateral="USDC",
-                    oracle_type=asset.get("oracleType"),
+                    oracle_type="internal",
                     fee_mode=fee_mode,
                     max_leverage=Decimal(str(asset.get("maxLeverage", 20))),
+                    session_notes="24/7 perp",
                     is_active=True,
                 )
             )
 
-        log.info("registry_built", total=len(records))
+        # ── HIP-3 spot deployer markets ───────────────────────────────────────
+        tokens: list[dict] = spot_data.get("tokens", [])
+        spot_pairs: list[dict] = spot_data.get("universe", [])
+
+        # Build index: token_index -> token_info
+        token_by_idx: dict[int, dict] = {t["index"]: t for t in tokens}
+
+        # Build index: token_index -> spot_pair name
+        pair_by_token: dict[int, str] = {}
+        for pair in spot_pairs:
+            pair_tokens = pair.get("tokens", [])
+            if pair_tokens:
+                pair_by_token[pair_tokens[0]] = pair.get("name", "")
+
+        for token in tokens:
+            fee_share = float(token.get("deployerTradingFeeShare", 0))
+            if fee_share == 0:
+                continue  # skip non-deployer tokens
+
+            name: str = token.get("name", "")
+            full_name: str = token.get("fullName") or ""
+            if not name:
+                continue
+
+            venue = venue_label_from_name(name, full_name)
+            asset_cls = asset_class_from_symbol(name)
+
+            # Refine asset class from full_name for equity tokens
+            if full_name and asset_cls == "crypto":
+                fn_lower = full_name.lower()
+                if any(w in fn_lower for w in ["tesla", "nvidia", "apple", "amazon", "google",
+                                                "microsoft", "meta ", "spacex", "openai", "hood"]):
+                    asset_cls = "equity"
+                elif any(w in fn_lower for w in ["sp500", "spy", "qqq", "nasdaq", "s&p"]):
+                    asset_cls = "index"
+                elif any(w in fn_lower for w in ["gold", "silver", "xau", "oil"]):
+                    asset_cls = "commodity"
+                elif any(w in fn_lower for w in ["eur", "gbp", "jpy"]):
+                    asset_cls = "fx"
+
+            spot_pair_name = pair_by_token.get(token["index"], f"@{token['index']}")
+
+            records.append(
+                MarketRegistry(
+                    market_id=f"hl-spot:{spot_pair_name}",
+                    venue_label=venue,
+                    deployer=full_name or None,
+                    symbol=name,
+                    asset_class=asset_cls,
+                    collateral="USDC",
+                    oracle_type="deployer",
+                    fee_mode="deployer_share",
+                    funding_formula="deployer_controlled",
+                    session_notes=full_name or None,
+                    is_active=True,
+                )
+            )
+
+        # Deduplicate on market_id (same token can appear in multiple spot pairs)
+        seen: dict[str, MarketRegistry] = {}
+        for r in records:
+            if r.market_id not in seen:
+                seen[r.market_id] = r
+        records = list(seen.values())
+
+        log.info("registry_built", total=len(records), perps=len(perp_universe),
+                 hip3=len([r for r in records if r.fee_mode == "deployer_share"]))
         return records
 
     # ── WebSocket subscriptions ───────────────────────────────────────────────
