@@ -48,14 +48,20 @@ Running `arb-registry` against the live Hyperliquid API revealed the actual univ
 
 ## Phase 1 status — data collection live
 
-Collector running against: `SPX, BTC, ETH, SOL, HYPE, FARTCOIN, TRUMP`
+Collector supports mixed universes:
+- native perps (e.g. `BTC`, `SPX`, `hl-perp:ETH`)
+- HIP-3 spot deployer pairs (e.g. `@279`, `hl-spot:@279`)
+- symbol resolution through registry (e.g. `SPX` can resolve to both perp + spot markets)
 
 To start collecting for your focus markets:
 ```bash
-arb-collect --markets "SPX,BTC,ETH,SOL,HYPE"
+arb-collect --markets "SPX,@279,@288,BTC,ETH,SOL" --references "SPX,XAU,TSLA,NVDA"
 ```
 
-Data flowing into: `raw_quotes`, `raw_trades`, `market_state`, `funding_state`
+Data flowing into:
+- `raw_quotes`, `raw_trades` (perp + spot)
+- `market_state`, `funding_state` (perp contexts)
+- `reference_state` (external reference polling)
 
 **Minimum data needed before hypothesis testing:** 48h of continuous collection on the target pairs.
 
@@ -64,8 +70,8 @@ Data flowing into: `raw_quotes`, `raw_trades`, `market_state`, `funding_state`
 ## Next steps
 
 ### Immediate (Phase 1)
-- [ ] Extend collector to cover spot deployer tokens: `@264` (TSLA), `@265` (NVDA), `@279` (SPY), `@288` (QQQ), `@182` (XAUT0)
-- [ ] Add reference price feed (Pyth or Yahoo Finance) for SPX, gold, TSLA, NVDA
+- [x] Extend collector to cover spot deployer tokens: `@264` (TSLA), `@265` (NVDA), `@279` (SPY), `@288` (QQQ), `@182` (XAUT0)
+- [x] Add reference price polling path for SPX, gold, TSLA, NVDA (currently Stooq-backed)
 - [ ] Run collector continuously for 48h minimum
 - [ ] Verify gap rate stays below 1% in `data_gaps` table
 
@@ -81,8 +87,8 @@ Data flowing into: `raw_quotes`, `raw_trades`, `market_state`, `funding_state`
 - [ ] Run falsification suite: 2x slippage, 2x fees, latency shock
 
 ### Known gaps to address
-- Spot deployer market data ingestion (collector currently only handles perp WS channels)
-- Reference/external price feed integration
+- Upgrade reference source from lightweight polling to production-grade feed(s) (e.g. Pyth/official vendor)
+- Add operational automation around collector restarts and heartbeat alerts
 - Felix venue classification: only FEUSD identified — watch for new market deployments
 
 ---
@@ -138,11 +144,25 @@ arb-collect           # Phase 1: start data collector
 arb-backtest --help   # Phase 4: run a backtest
 ```
 
+Collector options:
+
+```bash
+arb-collect --help
+# --markets: symbols, @N spot IDs, or canonical hl-perp:/hl-spot: IDs
+# --references: comma-separated reference symbols
+# --reference-poll-s: external reference polling interval
+```
+
 ## Running tests
 
 ```bash
 pytest tests/ -v
 ```
+
+## Documentation discipline
+
+- Update `CHANGELOG.md` for every meaningful change in goals, thinking, or implementation.
+- Prefer entries that explain *why now* and *what changed in decision-making*, not only file diffs.
 
 ## Key design decisions
 
