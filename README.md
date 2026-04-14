@@ -21,23 +21,91 @@ Four hypotheses, tested independently:
 
 The framework is designed to **prove or kill** each hypothesis, not to assume it.
 
+---
+
+## Phase 0 findings — market discovery
+
+Running `arb-registry` against the live Hyperliquid API revealed the actual universe:
+
+| Venue | Count | Markets |
+|---|---|---|
+| **hl_native** | 229 perps | BTC, ETH, SOL, **SPX, NQ, QQQ** (index), **XAUT0** (gold proxy), and 223 others |
+| **trade[XYZ] / Wagyu.xyz** | 5 tokens | **TSLA, NVDA, SPACEX** (equity), XMR1, TRADE |
+| **Felix** | 1 token | FEUSD (their USD stablecoin — not a trading market yet) |
+| **Unit Protocol** | 15 tokens | Wrapped crypto: UBTC, UETH, USOL, USPYX (SP500), UFART, etc. |
+| **Other deployers** | ~180 tokens | AAPL, GOOGL, AMZN, META, SPY, QQQ, GLD, SLV and many more — deployer unknown |
+
+**Key architectural finding:** HIP-3 markets do not appear in the `/info type=metaAndAssetCtxs` perp endpoint. They live in the **spot universe** (`/info type=spotMeta`) as tokens with `deployerTradingFeeShare > 0`.
+
+**Hypothesis revision:** Felix has no active trading markets yet — only a stablecoin. The original XYZ-vs-Felix framing needs to shift. The real cross-venue pairs are:
+
+1. `hl-perp:SPX` (native index perp) ↔ `SPY` / `QQQ` spot deployer tokens — same underlying, different oracle and fee mechanics
+2. `hl-perp:NQ` / `hl-perp:QQQ` ↔ `QQQM` (Melt) — Nasdaq basis
+3. `XAUT0` (gold proxy commodity perp) ↔ `GLD` spot token ↔ external gold reference
+4. `TSLA` / `NVDA` (XYZ equity tokens) ↔ their TradFi reference prices
+
+---
+
+## Phase 1 status — data collection live
+
+Collector running against: `SPX, BTC, ETH, SOL, HYPE, FARTCOIN, TRUMP`
+
+To start collecting for your focus markets:
+```bash
+arb-collect --markets "SPX,BTC,ETH,SOL,HYPE"
+```
+
+Data flowing into: `raw_quotes`, `raw_trades`, `market_state`, `funding_state`
+
+**Minimum data needed before hypothesis testing:** 48h of continuous collection on the target pairs.
+
+---
+
+## Next steps
+
+### Immediate (Phase 1)
+- [ ] Extend collector to cover spot deployer tokens: `@264` (TSLA), `@265` (NVDA), `@279` (SPY), `@288` (QQQ), `@182` (XAUT0)
+- [ ] Add reference price feed (Pyth or Yahoo Finance) for SPX, gold, TSLA, NVDA
+- [ ] Run collector continuously for 48h minimum
+- [ ] Verify gap rate stays below 1% in `data_gaps` table
+
+### Phase 2 — hypothesis testing (after 48h of data)
+- [ ] `notebooks/02_lead_lag.py` — test SPX perp vs SPY/QQQ spot lead-lag
+- [ ] `notebooks/03_spread_reversion.py` — test SPX/SPY basis stationarity
+- [ ] `notebooks/04_funding_carry.py` — compare funding across native vs deployer markets
+- [ ] Extend venue detection for AAPL, GOOGL, SPY, GLD, SLV deployers (currently `hl_native` fallback)
+
+### Phase 3 — strategy candidates (after hypothesis validation)
+- [ ] Implement passive lead-lag catcher (Candidate 1) if Hypothesis A holds
+- [ ] Implement spread reversion pair (Candidate 2) if Hypothesis B holds
+- [ ] Run falsification suite: 2x slippage, 2x fees, latency shock
+
+### Known gaps to address
+- Spot deployer market data ingestion (collector currently only handles perp WS channels)
+- Reference/external price feed integration
+- Felix venue classification: only FEUSD identified — watch for new market deployments
+
+---
+
 ## Phases
 
 ```
-0  Market registry         → catalog all HIP-3 markets (XYZ, Felix, native)
-1  Data engineering        → quotes, trades, mark, oracle, funding, OI
-2  Hypothesis testing      → A/B/C/D notebooks with empirical validation
-3  Strategy candidates     → four implementations derived from findings
-4  Event-driven backtest   → realistic fees, slippage, queue position
-5  Paper trading           → ≥2 weeks live, compare to backtest
-6  Small-capital live test → constrained exposure with hard kill switches
+0  Market registry     ✅ DONE — 393 markets in DB, XYZ/Felix/Unit classified
+1  Data engineering    🔄 IN PROGRESS — collector live, 7 markets streaming
+2  Hypothesis testing  ⏳ BLOCKED on 48h data minimum
+3  Strategy candidates ⏳ BLOCKED on Phase 2
+4  Backtesting         ⏳ BLOCKED on Phase 3
+5  Paper trading       ⏳ BLOCKED on Phase 4
+6  Live small-capital  ⏳ BLOCKED on Phase 5
 ```
+
+---
 
 ## Structure
 
 ```
 src/arb/
-├── market_data/    # collector, client, normalizer, event store
+├── market_data/    # collector, client (perp+spot), normalizer, event store
 ├── signals/        # spread calculator, lead-lag detector, funding analyzer, feature engine
 ├── execution/      # simulator, paper trader, order models
 ├── risk/           # controls, circuit breaker
@@ -46,19 +114,28 @@ src/arb/
 ├── reporting/      # weekly memo, go/no-go memo
 └── scripts/        # collect, build_registry, run_backtest
 notebooks/          # one notebook per hypothesis + registry + data quality + weekly memo
-sql/schema.sql      # full TimescaleDB schema
+sql/schema.sql      # full PostgreSQL schema (10 tables)
 ```
 
 ## Quickstart
 
 ```bash
-cp .env.example .env          # fill in HL_WALLET_ADDRESS if needed
-docker compose up -d          # postgres (timescaledb) + redis
+cp .env.example .env
 pip install -e ".[dev]"
 
-arb-registry                  # Phase 0: fetch and display market registry
-arb-collect                   # Phase 1: start data collector
-arb-backtest --help           # Phase 4: run a backtest
+# Start embedded postgres (no Docker needed)
+python3 -c "
+import pgserver, pathlib
+pg = pgserver.get_server(pgdata=pathlib.Path('.pgdata'), cleanup_mode=None)
+pg.ensure_pgdata_inited()
+pg.ensure_postgres_running()
+pg.psql(open('sql/schema.sql').read().replace('CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;','').replace('SELECT create_hypertable','--'))
+print('ready')
+"
+
+arb-registry          # Phase 0: fetch and display market registry
+arb-collect           # Phase 1: start data collector
+arb-backtest --help   # Phase 4: run a backtest
 ```
 
 ## Running tests
@@ -70,7 +147,7 @@ pytest tests/ -v
 ## Key design decisions
 
 - **No candle-only backtests.** Everything replays the raw event stream.
-- **Falsification is mandatory.** The backtest engine ships with 2x slippage shock, 2x fee shock, and latency shock tests built in.
+- **Falsification is mandatory.** 2x slippage shock, 2x fee shock, and latency shock are built into the backtest engine.
 - **Edge is not assumed.** If the go/no-go criteria aren't met, the correct answer is *do not fund*, not *optimize harder*.
 
 ## Go/No-Go criteria
