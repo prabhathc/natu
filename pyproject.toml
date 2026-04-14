@@ -46,6 +46,9 @@ dev = [
 [project.scripts]
 arb-collect = "arb.scripts.collect:main"
 arb-collector-daemon = "arb.scripts.collector_daemon:main"
+arb-backfill = "arb.scripts.backfill:main"
+arb-registry-audit = "arb.scripts.registry_audit:main"
+arb-phase1-status = "arb.scripts.phase1_status:main"
 arb-registry = "arb.scripts.build_registry:main"
 arb-backtest = "arb.scripts.run_backtest:main"
 

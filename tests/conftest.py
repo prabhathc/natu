@@ -25,6 +25,8 @@ def fake_spot_meta():
          "fullName": "Tesla - Wagyu.xyz"},
         # Felix token: evmContract + blank fullName
         {"index": 100, "name": "AAPL", "deployerTradingFeeShare": 1.0, "evmContract": True, "fullName": None},
+        # Felix stablecoin (docs/livediscovery known)
+        {"index": 101, "name": "FEUSD", "deployerTradingFeeShare": 1.0, "evmContract": True, "fullName": None},
         # Felix token that would collide if fallback @N were used (token index = 50 == pair @50 name)
         {"index": 50, "name": "COLLISION", "deployerTradingFeeShare": 1.0, "evmContract": True,
          "fullName": None},
@@ -37,6 +39,8 @@ def fake_spot_meta():
         {"name": "@5", "tokens": [10, 0]},
         # AAPL pair: token 100 is first
         {"name": "@50", "tokens": [100, 0]},
+        # FEUSD pair: token 101 is first
+        {"name": "@51", "tokens": [101, 0]},
         # A different pair that coincidentally is named @50 but uses token index 50
         # — this is the collision: if we used fallback f"@{token.index}" for COLLISION (idx=50),
         #   it would match the @50 pair name which belongs to AAPL. We avoid this by

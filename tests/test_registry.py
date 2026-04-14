@@ -72,6 +72,13 @@ class TestBuildRegistry:
         assert aapl.venue_label == "felix"
         assert aapl.market_id == "hl-spot:@50"
 
+    async def test_feusd_classified_as_felix(self, client, fake_perp_meta, fake_spot_meta):
+        records = await self._build(client, fake_perp_meta, fake_spot_meta)
+        feusd = next((r for r in records if r.symbol == "FEUSD"), None)
+        assert feusd is not None
+        assert feusd.venue_label == "felix"
+        assert feusd.market_id == "hl-spot:@51"
+
     async def test_zero_fee_share_tokens_excluded(self, client, fake_perp_meta, fake_spot_meta):
         """USDC and PURR have feeShare=0 → must not appear in registry."""
         records = await self._build(client, fake_perp_meta, fake_spot_meta)

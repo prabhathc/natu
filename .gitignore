@@ -24,6 +24,8 @@ venv/
 *.png
 weekly_memo_*.md
 registry_snapshot.csv
+data/registry_snapshots/
+reports/registry_audit/
 
 # OS
 .DS_Store

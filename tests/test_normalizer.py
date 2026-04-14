@@ -71,7 +71,7 @@ class TestVenueLabelFromName:
     # ── Felix tokens (identified by evmContract + blank fullName) ─────────────
     @pytest.mark.parametrize("name", [
         "AAPL", "GOOGL", "AMZN", "META", "MSFT",
-        "SPY", "QQQ", "GLD", "SLV", "HOOD", "BNB1", "QQQM",
+        "SPY", "QQQ", "GLD", "SLV", "HOOD", "BNB1", "QQQM", "FEUSD",
     ])
     def test_felix_by_name_set(self, name: str):
         assert venue_label_from_name(name) == "felix"

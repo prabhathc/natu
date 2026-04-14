@@ -78,12 +78,18 @@ def asset_class_from_symbol(symbol: str) -> AssetClass:
     return "crypto"  # default for unknown HIP-3 markets
 
 
-# Tokens confirmed as Felix-deployed (evmContract set, no fullName).
-# Identified by cross-referencing trade.usefelix.xyz with spot token addresses.
+# Tokens treated as Felix in registry classification.
+#
+# Why explicit mapping:
+# - Felix docs clearly position spot equities/ETFs as a core product line.
+# - Hyperliquid metadata fields like `evmContract` are not unique to Felix, so
+#   using them alone causes false positives.
+# - We therefore use a curated symbol set (docs + live discovery), then layer
+#   fullName text signals on top.
 _FELIX_TOKENS = {
     "AAPL", "GOOGL", "AMZN", "META", "MSFT",
     "SPY", "QQQ", "GLD", "SLV",
-    "HOOD", "BNB1", "QQQM",
+    "HOOD", "BNB1", "QQQM", "FEUSD",
 }
 
 # Tokens confirmed as Wagyu.xyz (trade[XYZ]) — identified by fullName field.

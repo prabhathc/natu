@@ -338,6 +338,34 @@ def install_reboot_cron(apply: bool = typer.Option(False, help="Apply directly t
     console.print("[green]Installed @reboot collector daemon entry in crontab.[/green]")
 
 
+@app.command()
+def install_ops_cron(apply: bool = typer.Option(False, help="Apply directly to user crontab")) -> None:
+    """Install (or print) periodic registry audit + status report cron jobs."""
+    cwd = Path.cwd()
+    py = sys.executable
+    lines = [
+        f'15 * * * * cd "{cwd}" && {py} -m arb.scripts.registry_audit >> "{STATE_DIR}/ops.log" 2>&1',
+        f'45 * * * * cd "{cwd}" && {py} -m arb.scripts.phase1_status --hours 24 >> "{STATE_DIR}/ops.log" 2>&1',
+    ]
+    if not apply:
+        console.print("Add these to your user crontab:")
+        for ln in lines:
+            console.print(ln)
+        return
+
+    try:
+        existing = subprocess.check_output(["crontab", "-l"], text=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError:
+        existing = ""
+    cur = [ln for ln in existing.splitlines() if ln.strip()]
+    for ln in lines:
+        if ln not in cur:
+            cur.append(ln)
+    payload = "\n".join(cur) + "\n"
+    subprocess.run(["crontab", "-"], input=payload, text=True, check=True)
+    console.print("[green]Installed ops cron entries (audit + phase1 status).[/green]")
+
+
 @app.command("_run_supervisor", hidden=True)
 def run_supervisor() -> None:
     """Internal: run supervisor loop in foreground."""

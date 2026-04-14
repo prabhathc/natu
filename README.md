@@ -37,12 +37,17 @@ Running `arb-registry` against the live Hyperliquid API revealed the actual univ
 
 **Key architectural finding:** HIP-3 markets do not appear in the `/info type=metaAndAssetCtxs` perp endpoint. They live in the **spot universe** (`/info type=spotMeta`) as tokens with `deployerTradingFeeShare > 0`.
 
-**Hypothesis revision:** Felix has no active trading markets yet — only a stablecoin. The original XYZ-vs-Felix framing needs to shift. The real cross-venue pairs are:
+**Hypothesis revision:** Felix should be treated as an active venue bucket in our registry (not FEUSD-only). Recent live registry snapshots classify a wider Felix set (e.g. AAPL/AMZN/GOOGL/META/MSFT/SPY/QQQ/GLD/SLV/QQQM/HOOD/BNB1/FEUSD), and research focus should be updated accordingly. The real cross-venue pairs are:
 
 1. `hl-perp:SPX` (native index perp) ↔ `SPY` / `QQQ` spot deployer tokens — same underlying, different oracle and fee mechanics
 2. `hl-perp:NQ` / `hl-perp:QQQ` ↔ `QQQM` (Melt) — Nasdaq basis
 3. `XAUT0` (gold proxy commodity perp) ↔ `GLD` spot token ↔ external gold reference
 4. `TSLA` / `NVDA` (XYZ equity tokens) ↔ their TradFi reference prices
+
+Felix capability context (platform docs):
+- Spot equities are a core Felix product and currently framed as broad tokenized US equity/ETF access.
+- Felix docs also describe perpetual futures and lending rails (CDP/feUSD and vanilla markets).
+- Our project still needs to distinguish between "Felix platform capabilities" and "markets currently discoverable/tradable through our Hyperliquid-focused ingestion path."
 
 ---
 
@@ -96,7 +101,7 @@ Why 48h?
 ### Known gaps to address
 - Upgrade reference source from lightweight polling to production-grade feed(s) (e.g. Pyth/official vendor)
 - Add operational automation around collector restarts and heartbeat alerts
-- Felix venue classification: only FEUSD identified — watch for new market deployments
+- Keep Felix market discovery in sync with platform docs and live registry snapshots (avoid stale FEUSD-only assumptions)
 
 ---
 
@@ -147,10 +152,44 @@ print('ready')
 "
 
 arb-registry          # Phase 0: fetch and display market registry
+arb-registry-audit    # snapshot + drift report against previous registry
+arb-phase1-status     # Phase 1 readiness summary from DB
+arb-backfill          # REST pull bootstrap (trades/funding/mark snapshot)
 arb-collect           # Phase 1: start data collector
 arb-collector-daemon  # Phase 1: managed daemon (start/stop/status/progress)
 arb-backtest --help   # Phase 4: run a backtest
 ```
+
+Registry drift workflow:
+
+```bash
+# Capture a live snapshot and diff versus previous snapshot
+arb-registry-audit
+
+# Outputs:
+# - data/registry_snapshots/latest.json
+# - reports/registry_audit/latest.md
+```
+
+Phase 1 readiness check:
+
+```bash
+arb-phase1-status --hours 24
+```
+
+Bootstrap + stream workflow (recommended):
+
+```bash
+# 1) Bootstrap recent history via REST
+arb-backfill --markets "" --funding-days 7 --max-trades 2000
+
+# 2) Continue with long-running websocket collection
+arb-collector-daemon start --markets "" --references "SPX,XAU,TSLA,NVDA"
+```
+
+Notes on `arb-backfill`:
+- Funding and mark-state bootstrap are the primary reliable pulls.
+- Trade pull is best-effort and can vary with exchange API behavior.
 
 Collector options:
 
@@ -188,6 +227,12 @@ arb-collector-daemon install-reboot-cron
 
 # Install to user crontab
 arb-collector-daemon install-reboot-cron --apply
+
+# Print hourly ops cron lines (registry audit + phase1 status)
+arb-collector-daemon install-ops-cron
+
+# Install hourly ops cron lines
+arb-collector-daemon install-ops-cron --apply
 ```
 
 ## Running tests
@@ -200,6 +245,9 @@ pytest tests/ -v
 
 - Update `CHANGELOG.md` for every meaningful change in goals, thinking, or implementation.
 - Prefer entries that explain *why now* and *what changed in decision-making*, not only file diffs.
+- Keep `docs/` updated for onboarding and operational playbooks:
+  - `docs/REPO_GUIDE.md`
+  - `docs/EXTERNAL_SOURCES.md`
 
 ## Key design decisions
 

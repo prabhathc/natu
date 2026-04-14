@@ -25,6 +25,9 @@ Format intent:
   - changelog maintenance expectations,
   - rationale for the 48h continuous collection gate before Phase 2.
 - Added daemon operations documentation (`arb-collector-daemon`) for automation and status queries.
+- Added Felix docs alignment notes so project framing reflects both:
+  - live registry-discovered Felix symbols, and
+  - documented Felix platform product scope (spot equities, perps, lending).
 
 ### Added
 - New `arb-collector-daemon` manager:
@@ -32,11 +35,52 @@ Format intent:
   - auto-restart supervisor for collector child process,
   - persisted config and log files under `~/.arb/collector-daemon`,
   - optional `install-reboot-cron` helper for startup automation.
+- New `arb-registry-audit` workflow:
+  - snapshots live registry to `data/registry_snapshots/`,
+  - writes drift report to `reports/registry_audit/`,
+  - highlights added/removed market IDs and venue/symbol drift.
+- New `arb-backfill` command for pull-mode bootstrap:
+  - pulls recent trades by market,
+  - pulls funding history for perp markets,
+  - snapshots current mark state from allMids,
+  - complements (not replaces) websocket collection.
+- New `arb-phase1-status` command:
+  - summarizes ingestion counts/coverage/gaps over a lookback window,
+  - emits PASS/WARN readiness signal for Phase 2 handoff.
+- Daemon ops automation additions:
+  - `install-ops-cron` prints/installs hourly registry-audit + phase1-status jobs.
+- Added local docs set for onboarding and source traceability:
+  - `docs/REPO_GUIDE.md`,
+  - `docs/EXTERNAL_SOURCES.md`.
 
 ### Validation
 - Full test suite run: `92 passed`.
 - Live registry smoke test (`arb.scripts.build_registry --no-save`) succeeded with current exchange data.
 - Live collector smoke test (`arb.scripts.collect --markets "SPX,@279"`) started successfully and ran for 20s (terminated intentionally by timeout).
+
+### Journal (2026-04-14)
+- Kicked off operations stack:
+  - full-universe backfill bootstrap,
+  - live registry drift audit snapshot/report,
+  - collector daemon running with broad reference symbols.
+- Added operator tooling to reduce manual overhead:
+  - `arb-backfill` (pull bootstrap),
+  - `arb-registry-audit` (drift tracking),
+  - `arb-phase1-status` (coverage/gap readiness signal),
+  - daemon cron helpers for reboot + hourly ops checks.
+- Clarified data strategy:
+  - pull mode accelerates startup and reconciliation,
+  - stream mode remains required for microstructure research and reproducible replay.
+
+### Next Steps (while collection runs)
+- Build Phase 2 batch jobs:
+  - lead-lag report job,
+  - spread stationarity/half-life report job,
+  - funding carry persistence report job.
+- Add paper-trade reconciliation dashboards:
+  - signal → order → fill chain completeness,
+  - orphan-leg and hedge completion monitoring.
+- Generate first weekly memo directly from DB snapshots + audit outputs.
 
 ## [2026-04-14] - Phase 1 ingestion + signal stability pass
 
