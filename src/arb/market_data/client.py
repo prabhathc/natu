@@ -42,6 +42,15 @@ def _ts(ms: int | float | str) -> datetime:
     return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
 
 
+def _market_id_for_coin(coin: str) -> str:
+    """
+    Map exchange coin identifiers to canonical market IDs.
+
+    Perps use symbols like BTC/ETH/SPX while spot deployer markets are "@N".
+    """
+    return f"hl-spot:{coin}" if coin.startswith("@") else f"hl-perp:{coin}"
+
+
 class HyperliquidClient:
     """Async client for Hyperliquid REST and WebSocket APIs."""
 
@@ -185,7 +194,7 @@ class HyperliquidClient:
             if not name:
                 continue
 
-            venue = venue_label_from_name(name, full_name)
+            venue = venue_label_from_name(name, full_name, has_evm_contract=bool(token.get("evmContract")))
             asset_cls = asset_class_from_symbol(name)
 
             # Refine asset class from full_name for equity tokens
@@ -201,7 +210,9 @@ class HyperliquidClient:
                 elif any(w in fn_lower for w in ["eur", "gbp", "jpy"]):
                     asset_cls = "fx"
 
-            spot_pair_name = pair_by_token.get(token["index"], f"@{token['index']}")
+            spot_pair_name = pair_by_token.get(token["index"])
+            if spot_pair_name is None:
+                continue  # token has no active spot pair — skip
 
             records.append(
                 MarketRegistry(
@@ -314,7 +325,7 @@ class HyperliquidClient:
         best_ask = asks[0]
         quote = RawQuote(
             ts=ts,
-            market_id=f"hl-perp:{coin}",
+            market_id=_market_id_for_coin(coin),
             bid_px=Decimal(str(best_bid["px"])),
             bid_sz=Decimal(str(best_bid["sz"])),
             ask_px=Decimal(str(best_ask["px"])),
@@ -329,7 +340,7 @@ class HyperliquidClient:
         for t in msg.get("data", []):
             trade = RawTrade(
                 ts=_ts(t["time"]),
-                market_id=f"hl-perp:{t['coin']}",
+                market_id=_market_id_for_coin(t["coin"]),
                 trade_id=str(t.get("tid", "")),
                 price=Decimal(str(t["px"])),
                 size=Decimal(str(t["sz"])),
@@ -362,7 +373,7 @@ class HyperliquidClient:
 
         funding = FundingStateEvent(
             ts=ts,
-            market_id=f"hl-perp:{coin}",
+            market_id=_market_id_for_coin(coin),
             funding_rate=Decimal(str(ctx_data.get("funding", "0"))),
             predicted_rate=Decimal(str(ctx_data.get("predictedFunding", ctx_data.get("funding", "0")))),
         )
@@ -370,7 +381,7 @@ class HyperliquidClient:
 
         state = MarketStateEvent(
             ts=ts,
-            market_id=f"hl-perp:{coin}",
+            market_id=_market_id_for_coin(coin),
             mark_px=Decimal(str(ctx_data["markPx"])) if ctx_data.get("markPx") else None,
             oracle_px=Decimal(str(ctx_data["oraclePx"])) if ctx_data.get("oraclePx") else None,
             open_interest=Decimal(str(ctx_data["openInterest"])) if ctx_data.get("openInterest") else None,

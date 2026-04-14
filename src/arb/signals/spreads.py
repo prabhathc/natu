@@ -101,8 +101,10 @@ class SpreadCalculator:
         _, a, b = self._tail(n)
         if len(a) < 10:
             return 1.0
-        X = np.column_stack([b, np.ones(len(b))])
-        result = OLS(a, X).fit()
+        # Use a no-intercept regression for trading hedge ratio. Adding a free
+        # intercept absorbs level differences and can materially bias beta on
+        # integrated price series.
+        result = OLS(a, b[:, None]).fit()
         return float(result.params[0])
 
     def spread_series(self, beta: float | None = None) -> np.ndarray:

@@ -119,9 +119,11 @@ class LeadLagDetector:
         n = len(ra_arr)
         for lag in range(-max_lag, max_lag + 1):
             if lag > 0:
-                x, y = ra_arr[lag:], rb_arr[:n - lag]
+                # Positive lag => A leads B by `lag` steps, so align A_t with B_{t+lag}.
+                x, y = ra_arr[:n - lag], rb_arr[lag:]
             elif lag < 0:
-                x, y = ra_arr[:n + lag], rb_arr[-lag:]
+                # Negative lag => B leads A by `-lag` steps.
+                x, y = ra_arr[-lag:], rb_arr[:n + lag]
             else:
                 x, y = ra_arr, rb_arr
             if len(x) < 10:
