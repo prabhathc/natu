@@ -22,7 +22,16 @@ Format intent:
   - mixed perp + spot collection in `arb-collect`,
   - reference polling support and CLI options,
   - revised immediate checklist and known gaps,
-  - changelog maintenance expectations.
+  - changelog maintenance expectations,
+  - rationale for the 48h continuous collection gate before Phase 2.
+- Added daemon operations documentation (`arb-collector-daemon`) for automation and status queries.
+
+### Added
+- New `arb-collector-daemon` manager:
+  - `start`, `stop`, `restart`, `status`, `progress`,
+  - auto-restart supervisor for collector child process,
+  - persisted config and log files under `~/.arb/collector-daemon`,
+  - optional `install-reboot-cron` helper for startup automation.
 
 ### Validation
 - Full test suite run: `92 passed`.

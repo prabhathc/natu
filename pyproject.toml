@@ -45,6 +45,7 @@ dev = [
 
 [project.scripts]
 arb-collect = "arb.scripts.collect:main"
+arb-collector-daemon = "arb.scripts.collector_daemon:main"
 arb-registry = "arb.scripts.build_registry:main"
 arb-backtest = "arb.scripts.run_backtest:main"
 

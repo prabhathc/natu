@@ -65,6 +65,13 @@ Data flowing into:
 
 **Minimum data needed before hypothesis testing:** 48h of continuous collection on the target pairs.
 
+Why 48h?
+- Funding and carry effects are periodic (8h cadence), so 48h captures multiple cycles instead of a single snapshot.
+- Intraday behavior shifts by hour/session; 48h gives at least two full day/night rotations.
+- Lead/lag and spread signals can look strong in short windows by chance; longer windows reduce false positives.
+- Data engineering quality (disconnects, gaps, delayed writes) only shows up under sustained runtime.
+- Before Phase 2, we need enough depth to estimate stationarity/half-life and validate robustness checks.
+
 ---
 
 ## Next steps
@@ -141,6 +148,7 @@ print('ready')
 
 arb-registry          # Phase 0: fetch and display market registry
 arb-collect           # Phase 1: start data collector
+arb-collector-daemon  # Phase 1: managed daemon (start/stop/status/progress)
 arb-backtest --help   # Phase 4: run a backtest
 ```
 
@@ -151,6 +159,35 @@ arb-collect --help
 # --markets: symbols, @N spot IDs, or canonical hl-perp:/hl-spot: IDs
 # --references: comma-separated reference symbols
 # --reference-poll-s: external reference polling interval
+```
+
+Daemon workflow (recommended for long runs):
+
+```bash
+# Start background supervisor + collector
+arb-collector-daemon start --markets "" --references "SPX,XAU,TSLA,NVDA"
+
+# Check runtime health and logs
+arb-collector-daemon status
+
+# Query DB ingestion progress (rows + distinct markets/symbols)
+arb-collector-daemon progress --hours 1
+
+# Restart with saved config
+arb-collector-daemon restart
+
+# Stop everything
+arb-collector-daemon stop
+```
+
+Optional boot automation:
+
+```bash
+# Print @reboot cron line
+arb-collector-daemon install-reboot-cron
+
+# Install to user crontab
+arb-collector-daemon install-reboot-cron --apply
 ```
 
 ## Running tests
