@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arb"
+version = "0.1.0"
+description = "HIP-3 Cross-Venue Basis and Lead-Lag Validation Program"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9",
+    "websockets>=12.0",
+    "asyncpg>=0.29",
+    "sqlalchemy[asyncio]>=2.0",
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "statsmodels>=0.14",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "python-dotenv>=1.0",
+    "structlog>=23.2",
+    "rich>=13.7",
+    "typer>=0.9",
+    "httpx>=0.26",
+    "orjson>=3.9",
+    "pyarrow>=14.0",
+    "eth-account>=0.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ipykernel>=6.27",
+    "jupyter>=1.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.18",
+]
+
+[project.scripts]
+arb-collect = "arb.scripts.collect:main"
+arb-registry = "arb.scripts.build_registry:main"
+arb-backtest = "arb.scripts.run_backtest:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arb"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
